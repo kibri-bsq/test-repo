@@ -4,6 +4,7 @@ import { buildDependencyGraph, topologicallySortGraph } from "@engine/dependency
 import { parseFormula } from "@engine/formula-parser";
 import { aggregateRequest } from "@engine/aggregation-engine";
 import { InMemoryAggregateLookupStore, evaluateKpisForNode } from "@engine/evaluation-engine";
+import { buildPlacementPlanBundle } from "@engine/placement-engine";
 
 export function buildRuntimePlan(request: ViewRequest, metadata: MetadataBundle): RuntimePlan {
   const selected = request.selectedKpis.map(id => metadata.kpis[id]).filter(Boolean);
@@ -112,6 +113,7 @@ function assembleRendererMatrix(evaluatedNodes: Map<string, any>, request: ViewR
 
 export function executeView(request: ViewRequest, payload: BackendPayload, metadata: MetadataBundle): ExecutionResultContract {
   const runtimePlan = buildRuntimePlan(request, metadata);
+  const placementPlanBundle = buildPlacementPlanBundle(runtimePlan.astByKpi as any, request, metadata);
   const aggregation = aggregateRequest(request, payload, metadata);
   const aggregateLookup = buildAggregateLookup(aggregation.nodes);
 
@@ -124,7 +126,8 @@ export function executeView(request: ViewRequest, payload: BackendPayload, metad
     matrix: assembleRendererMatrix(evaluated, request, metadata),
     executionMeta: {
       planVersion: runtimePlan.planVersion,
-      sliceSignature: payload.sliceSignature
-    }
+      sliceSignature: payload.sliceSignature,
+      placementPlans: placementPlanBundle.plans as any
+    } as any
   };
 }

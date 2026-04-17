@@ -1,0 +1,34 @@
+{
+  "rowDimensions": [
+    "Region",
+    "Product",
+    "Channel"
+  ],
+  "columnDimensions": [
+    "Month"
+  ],
+  "selectedKpis": [
+    "GrossMargin",
+    "MarginPct",
+    "BudgetVariance",
+    "BudgetVariancePct",
+    "ContributionToParent",
+    "MoMGrowth"
+  ],
+  "filters": [],
+  "totalOptions": {
+    "showRowTotals": true,
+    "showColumnTotals": true,
+    "showGrandTotal": true,
+    "rowSubtotalDimensions": [
+      "Region",
+      "Product"
+    ],
+    "columnSubtotalDimensions": [
+      "Month"
+    ]
+  },
+  "displayOptions": {
+    "includeDiagnostics": true
+  }
+}

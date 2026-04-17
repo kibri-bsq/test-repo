@@ -1,0 +1,14 @@
+{
+  "name": "@engine/placement-engine",
+  "version": "0.4.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@engine/contracts": "workspace:*",
+    "@engine/engine-model": "workspace:*",
+    "@engine/formula-parser": "workspace:*"
+  },
+  "devDependencies": { "vitest": "^2.1.4" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" }
+}

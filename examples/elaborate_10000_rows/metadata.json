@@ -1,0 +1,254 @@
+{
+  "schemaVersion": "1",
+  "dimensions": {
+    "Region": {
+      "id": "Region",
+      "label": "Region",
+      "type": "hierarchical",
+      "ordered": false,
+      "hierarchy": true,
+      "members": [
+        "Company",
+        "North",
+        "South",
+        "East",
+        "West"
+      ],
+      "parentByMember": {
+        "North": "Company",
+        "South": "Company",
+        "East": "Company",
+        "West": "Company",
+        "Company": null
+      }
+    },
+    "Product": {
+      "id": "Product",
+      "label": "Product",
+      "type": "flat",
+      "ordered": false,
+      "hierarchy": false,
+      "members": [
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "Delta",
+        "Omega"
+      ]
+    },
+    "Channel": {
+      "id": "Channel",
+      "label": "Channel",
+      "type": "flat",
+      "ordered": false,
+      "hierarchy": false,
+      "members": [
+        "Online",
+        "Retail",
+        "Distributor"
+      ]
+    },
+    "Month": {
+      "id": "Month",
+      "label": "Month",
+      "type": "ordered",
+      "ordered": true,
+      "hierarchy": false,
+      "members": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct"
+      ],
+      "ordering": [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct"
+      ]
+    },
+    "Scenario": {
+      "id": "Scenario",
+      "label": "Scenario",
+      "type": "flat",
+      "ordered": false,
+      "hierarchy": false,
+      "members": [
+        "Actual",
+        "Budget"
+      ]
+    },
+    "StoreId": {
+      "id": "StoreId",
+      "label": "StoreId",
+      "type": "flat",
+      "ordered": false,
+      "hierarchy": false,
+      "members": [
+        "S001",
+        "S002",
+        "S003",
+        "S004",
+        "S005",
+        "S006",
+        "S007",
+        "S008",
+        "S009"
+      ]
+    },
+    "CustomerSegment": {
+      "id": "CustomerSegment",
+      "label": "CustomerSegment",
+      "type": "flat",
+      "ordered": false,
+      "hierarchy": false,
+      "members": [
+        "SMB",
+        "MidMarket",
+        "Enterprise"
+      ]
+    }
+  },
+  "measures": {
+    "Revenue": {
+      "id": "Revenue",
+      "label": "Revenue",
+      "aggregation": "sum",
+      "formatHint": "currency"
+    },
+    "Cost": {
+      "id": "Cost",
+      "label": "Cost",
+      "aggregation": "sum",
+      "formatHint": "currency"
+    },
+    "Units": {
+      "id": "Units",
+      "label": "Units",
+      "aggregation": "sum",
+      "formatHint": "integer"
+    },
+    "Discount": {
+      "id": "Discount",
+      "label": "Discount",
+      "aggregation": "sum",
+      "formatHint": "currency"
+    }
+  },
+  "kpis": {
+    "GrossMargin": {
+      "id": "GrossMargin",
+      "label": "Gross Margin",
+      "formula": "Revenue - Cost",
+      "formulaType": "measure_based",
+      "dependencies": [],
+      "requiredDimensions": [],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": true,
+      "missingValueBehavior": "null",
+      "formatHint": "currency",
+      "version": "1"
+    },
+    "MarginPct": {
+      "id": "MarginPct",
+      "label": "Margin %",
+      "formula": "GrossMargin / Revenue",
+      "formulaType": "measure_based",
+      "dependencies": [
+        "GrossMargin"
+      ],
+      "requiredDimensions": [],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": true,
+      "missingValueBehavior": "warning",
+      "formatHint": "percent",
+      "version": "1"
+    },
+    "BudgetVariance": {
+      "id": "BudgetVariance",
+      "label": "Budget Variance",
+      "formula": "Revenue[Scenario=Actual] - Revenue[Scenario=Budget]",
+      "formulaType": "cross_member",
+      "dependencies": [],
+      "requiredDimensions": [
+        "Scenario"
+      ],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": true,
+      "missingValueBehavior": "warning",
+      "formatHint": "currency",
+      "version": "1"
+    },
+    "BudgetVariancePct": {
+      "id": "BudgetVariancePct",
+      "label": "Budget Variance %",
+      "formula": "BudgetVariance / Revenue[Scenario=Budget]",
+      "formulaType": "cross_member",
+      "dependencies": [
+        "BudgetVariance"
+      ],
+      "requiredDimensions": [
+        "Scenario"
+      ],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": true,
+      "missingValueBehavior": "warning",
+      "formatHint": "percent",
+      "version": "1"
+    },
+    "ContributionToParent": {
+      "id": "ContributionToParent",
+      "label": "Contribution To Parent",
+      "formula": "Revenue / Revenue[Region=parent]",
+      "formulaType": "context_relative",
+      "dependencies": [],
+      "requiredDimensions": [
+        "Region"
+      ],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": false,
+      "missingValueBehavior": "warning",
+      "formatHint": "percent",
+      "version": "1"
+    },
+    "MoMGrowth": {
+      "id": "MoMGrowth",
+      "label": "Month-over-Month Growth",
+      "formula": "(Revenue - Revenue[Month=previous]) / Revenue[Month=previous]",
+      "formulaType": "time_relative",
+      "dependencies": [],
+      "requiredDimensions": [
+        "Month"
+      ],
+      "totalStrategy": "recompute",
+      "validAtLeaf": true,
+      "validAtSubtotal": true,
+      "validAtGrandTotal": false,
+      "missingValueBehavior": "warning",
+      "formatHint": "percent",
+      "version": "1"
+    }
+  }
+}

@@ -10,8 +10,14 @@
     "@engine/formula-parser": "workspace:*",
     "@engine/dependency-graph": "workspace:*",
     "@engine/aggregation-engine": "workspace:*",
-    "@engine/evaluation-engine": "workspace:*"
+    "@engine/evaluation-engine": "workspace:*",
+    "@engine/placement-engine": "workspace:*"
   },
-  "devDependencies": { "vitest": "^2.1.4" },
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" }
+  "devDependencies": {
+    "vitest": "^2.1.4"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
 }

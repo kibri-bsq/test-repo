@@ -6,7 +6,7 @@ const baseTotalOptions = {
   showColumnTotals: true,
   showGrandTotal: true,
   rowSubtotalDimensions: ["Region", "Entity"],
-  columnSubtotalDimensions: ["Month"]
+  columnSubtotalDimensions: ["Month", "Scenario", "Product"]
 };
 
 export const examples = [
@@ -25,14 +25,7 @@ export const examples = [
         { Region: "North", Product: "A", Month: "Jan", Scenario: "Actual", Revenue: 300, Cost: 100 },
         { Region: "North", Product: "A", Month: "Jan", Scenario: "Budget", Revenue: 250, Cost: 120 }
       ],
-      fieldMap: {
-        Region: "dim_region",
-        Product: "dim_product",
-        Month: "dim_month",
-        Scenario: "dim_scenario",
-        Revenue: "Revenue",
-        Cost: "Cost"
-      }
+      fieldMap: { Region: "dim_region", Product: "dim_product", Month: "dim_month", Scenario: "dim_scenario", Revenue: "Revenue", Cost: "Cost" }
     } as BackendPayload,
     metadata: {
       schemaVersion: "1",
@@ -48,32 +41,14 @@ export const examples = [
       },
       kpis: {
         Margin: {
-          id: "Margin",
-          label: "Margin",
-          formula: "Revenue - Cost",
-          formulaType: "measure_based",
-          dependencies: [],
-          requiredDimensions: [],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: true,
-          missingValueBehavior: "null",
-          version: "1"
+          id: "Margin", label: "Margin", formula: "Revenue - Cost", formulaType: "measure_based",
+          dependencies: [], requiredDimensions: [], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "null", version: "1"
         },
         Variance: {
-          id: "Variance",
-          label: "Variance",
-          formula: "Revenue[Scenario=Actual] - Revenue[Scenario=Budget]",
-          formulaType: "cross_member",
-          dependencies: [],
-          requiredDimensions: ["Scenario"],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: true,
-          missingValueBehavior: "warning",
-          version: "1"
+          id: "Variance", label: "Variance", formula: "Revenue[Scenario=Actual] - Revenue[Scenario=Budget]", formulaType: "cross_member",
+          dependencies: [], requiredDimensions: ["Scenario"], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "warning", version: "1"
         }
       }
     } as MetadataBundle,
@@ -82,7 +57,7 @@ export const examples = [
       columnDimensions: ["Month"],
       selectedKpis: ["Margin", "Variance"],
       filters: [],
-      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Region"] },
+      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Region"], columnSubtotalDimensions: ["Month"] },
       displayOptions: { includeDiagnostics: true }
     } as ViewRequest
   },
@@ -98,13 +73,7 @@ export const examples = [
         { Region: "South", Product: "B", Month: "Jan", Revenue: 1000, Cost: 700 },
         { Region: "North", Product: "A", Month: "Jan", Revenue: 400, Cost: 260 }
       ],
-      fieldMap: {
-        Region: "dim_region",
-        Product: "dim_product",
-        Month: "dim_month",
-        Revenue: "Revenue",
-        Cost: "Cost"
-      }
+      fieldMap: { Region: "dim_region", Product: "dim_product", Month: "dim_month", Revenue: "Revenue", Cost: "Cost" }
     } as BackendPayload,
     metadata: {
       schemaVersion: "1",
@@ -119,32 +88,14 @@ export const examples = [
       },
       kpis: {
         Margin: {
-          id: "Margin",
-          label: "Margin",
-          formula: "Revenue - Cost",
-          formulaType: "measure_based",
-          dependencies: [],
-          requiredDimensions: [],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: true,
-          missingValueBehavior: "null",
-          version: "1"
+          id: "Margin", label: "Margin", formula: "Revenue - Cost", formulaType: "measure_based",
+          dependencies: [], requiredDimensions: [], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "null", version: "1"
         },
         MarginPct: {
-          id: "MarginPct",
-          label: "Margin %",
-          formula: "Margin / Revenue",
-          formulaType: "measure_based",
-          dependencies: ["Margin"],
-          requiredDimensions: [],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: true,
-          missingValueBehavior: "warning",
-          version: "1"
+          id: "MarginPct", label: "Margin %", formula: "Margin / Revenue", formulaType: "measure_based",
+          dependencies: ["Margin"], requiredDimensions: [], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "warning", version: "1"
         }
       }
     } as MetadataBundle,
@@ -153,7 +104,7 @@ export const examples = [
       columnDimensions: ["Month"],
       selectedKpis: ["Margin", "MarginPct"],
       filters: [],
-      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Region"] },
+      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Region"], columnSubtotalDimensions: ["Month"] },
       displayOptions: { includeDiagnostics: true }
     } as ViewRequest
   },
@@ -175,13 +126,8 @@ export const examples = [
       schemaVersion: "1",
       dimensions: {
         Entity: {
-          id: "Entity",
-          label: "Entity",
-          type: "hierarchical",
-          ordered: false,
-          hierarchy: true,
-          members: ["South", "A", "B"],
-          parentByMember: { A: "South", B: "South", South: null }
+          id: "Entity", label: "Entity", type: "hierarchical", ordered: false, hierarchy: true,
+          members: ["South", "A", "B"], parentByMember: { A: "South", B: "South", South: null }
         },
         Month: { id: "Month", label: "Month", type: "ordered", ordered: true, hierarchy: false, members: ["Jan"], ordering: ["Jan"] }
       },
@@ -191,18 +137,9 @@ export const examples = [
       },
       kpis: {
         ContributionPct: {
-          id: "ContributionPct",
-          label: "Contribution %",
-          formula: "Revenue / Revenue[Entity=parent]",
-          formulaType: "context_relative",
-          dependencies: [],
-          requiredDimensions: ["Entity"],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: false,
-          missingValueBehavior: "warning",
-          version: "1"
+          id: "ContributionPct", label: "Contribution %", formula: "Revenue / Revenue[Entity=parent]", formulaType: "context_relative",
+          dependencies: [], requiredDimensions: ["Entity"], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: false, missingValueBehavior: "warning", version: "1"
         }
       }
     } as MetadataBundle,
@@ -211,7 +148,7 @@ export const examples = [
       columnDimensions: ["Month"],
       selectedKpis: ["ContributionPct"],
       filters: [],
-      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Entity"] },
+      totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: ["Entity"], columnSubtotalDimensions: ["Month"] },
       displayOptions: { includeDiagnostics: true }
     } as ViewRequest
   },
@@ -242,18 +179,9 @@ export const examples = [
       },
       kpis: {
         MoMGrowth: {
-          id: "MoMGrowth",
-          label: "MoM Growth",
-          formula: "(Revenue - Revenue[Month=previous]) / Revenue[Month=previous]",
-          formulaType: "time_relative",
-          dependencies: [],
-          requiredDimensions: ["Month"],
-          totalStrategy: "recompute",
-          validAtLeaf: true,
-          validAtSubtotal: true,
-          validAtGrandTotal: false,
-          missingValueBehavior: "warning",
-          version: "1"
+          id: "MoMGrowth", label: "MoM Growth", formula: "(Revenue - Revenue[Month=previous]) / Revenue[Month=previous]",
+          formulaType: "time_relative", dependencies: [], requiredDimensions: ["Month"], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: false, missingValueBehavior: "warning", version: "1"
         }
       }
     } as MetadataBundle,
@@ -263,6 +191,61 @@ export const examples = [
       selectedKpis: ["MoMGrowth"],
       filters: [],
       totalOptions: { ...baseTotalOptions, rowSubtotalDimensions: [], columnSubtotalDimensions: ["Month"] },
+      displayOptions: { includeDiagnostics: true }
+    } as ViewRequest
+  },
+  {
+    name: "Product × Scenario Variance Placement",
+    payload: {
+      datasetId: "product_scenario_variance",
+      datasetVersion: "1.0.0",
+      sliceSignature: "example-product-scenario-variance",
+      extractedAt: "2026-04-17T00:00:00Z",
+      records: [
+        { Region: "North", Product: "Product A", Scenario: "Scenario A", Revenue: 1000, Cost: 600 },
+        { Region: "North", Product: "Product A", Scenario: "Scenario B", Revenue: 900, Cost: 590 },
+        { Region: "North", Product: "Product B", Scenario: "Scenario A", Revenue: 800, Cost: 500 },
+        { Region: "North", Product: "Product B", Scenario: "Scenario B", Revenue: 700, Cost: 480 },
+        { Region: "South", Product: "Product A", Scenario: "Scenario A", Revenue: 1200, Cost: 650 },
+        { Region: "South", Product: "Product A", Scenario: "Scenario B", Revenue: 1100, Cost: 640 },
+        { Region: "South", Product: "Product B", Scenario: "Scenario A", Revenue: 950, Cost: 560 },
+        { Region: "South", Product: "Product B", Scenario: "Scenario B", Revenue: 870, Cost: 555 }
+      ],
+      fieldMap: { Region: "dim_region", Product: "dim_product", Scenario: "dim_scenario", Revenue: "Revenue", Cost: "Cost" }
+    } as BackendPayload,
+    metadata: {
+      schemaVersion: "1",
+      dimensions: {
+        Region: { id: "Region", label: "Region", type: "flat", ordered: false, hierarchy: false, members: ["North", "South"] },
+        Product: { id: "Product", label: "Product", type: "flat", ordered: false, hierarchy: false, members: ["Product A", "Product B"] },
+        Scenario: { id: "Scenario", label: "Scenario", type: "flat", ordered: false, hierarchy: false, members: ["Scenario A", "Scenario B"] }
+      },
+      measures: {
+        Revenue: { id: "Revenue", label: "Revenue", aggregation: "sum" },
+        Cost: { id: "Cost", label: "Cost", aggregation: "sum" }
+      },
+      kpis: {
+        Margin: {
+          id: "Margin", label: "Margin", formula: "Revenue - Cost", formulaType: "measure_based",
+          dependencies: [], requiredDimensions: [], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "null", version: "1"
+        },
+        Variance: {
+          id: "Variance", label: "Variance", formula: "Revenue[Scenario=Scenario A] - Revenue[Scenario=Scenario B]", formulaType: "cross_member",
+          dependencies: [], requiredDimensions: ["Scenario"], totalStrategy: "recompute",
+          validAtLeaf: true, validAtSubtotal: true, validAtGrandTotal: true, missingValueBehavior: "warning", version: "1"
+        }
+      }
+    } as MetadataBundle,
+    request: {
+      rowDimensions: ["Region"],
+      columnDimensions: ["Product", "Scenario"],
+      selectedKpis: ["Margin", "Variance"],
+      filters: [],
+      totalOptions: {
+        showRowTotals: true, showColumnTotals: true, showGrandTotal: true,
+        rowSubtotalDimensions: ["Region"], columnSubtotalDimensions: ["Product", "Scenario"]
+      },
       displayOptions: { includeDiagnostics: true }
     } as ViewRequest
   }
