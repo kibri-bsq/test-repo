@@ -3,6 +3,16 @@ import ReactDOM from "react-dom/client";
 import { executeView } from "@engine/execution-engine";
 import { examples } from "@engine/test-data";
 
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(4);
+  return String(v);
+}
+
 function downloadJson(filename: string, value: unknown) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -15,28 +25,6 @@ function downloadJson(filename: string, value: unknown) {
 
 async function readJsonFile(file: File): Promise<any> {
   return JSON.parse(await file.text());
-}
-
-function formatValue(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : v.toFixed(4);
-  return String(v);
-}
-
-function nodeTypeClass(nodeType: string): string {
-  if (nodeType === "grandTotal") return "node-grand";
-  if (nodeType === "rowSubtotal" || nodeType === "columnSubtotal") return "node-subtotal";
-  return "node-leaf";
-}
-
-function isMeaningfulValue(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
-  if (typeof v === "number") return v !== 0;
-  return String(v).trim() !== "";
-}
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
 }
 
 function validateInput(input: any): string[] {
@@ -53,47 +41,68 @@ function validateInput(input: any): string[] {
   return errors;
 }
 
-function buildDerivedMatrix(cells: any[], placementPlans: Record<string, any>) {
-  const rowKeys = Array.from(new Set(cells.map((c: any) => c.rowPath.join(" / "))));
-  const baseColKeys = Array.from(new Set(cells.map((c: any) => c.columnPath.join(" / "))));
-  const baseCellMap = new Map(cells.map((c: any) => [`${c.rowPath.join(" / ")}||${c.columnPath.join(" / ")}`, c]));
+function nodeTypeClass(nodeType: string): string {
+  if (nodeType === "grandTotal") return "node-grand";
+  if (nodeType === "rowSubtotal" || nodeType === "columnSubtotal") return "node-subtotal";
+  return "node-leaf";
+}
+
+function isMeaningfulValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  if (typeof v === "number") return v !== 0;
+  return String(v).trim() !== "";
+}
+
+function mapToggleOptionToTotals(option: "none" | "row" | "column" | "both", rowDims: string[], colDims: string[]) {
+  return {
+    showRowTotals: option === "row" || option === "both",
+    showColumnTotals: option === "column" || option === "both",
+    rowSubtotalDimensions: option === "row" || option === "both" ? [...rowDims] : [],
+    columnSubtotalDimensions: option === "column" || option === "both" ? [...colDims] : []
+  };
+}
+
+function formatPathPart(part: string, kind: "row" | "column", dimLabel: string): string {
+  if (part === "__GRAND_TOTAL__") return "Grand Total";
+  if (part === "__TOTAL__") return `${dimLabel} Total`;
+  return part;
+}
+
+function buildMatrix(cells: any[], request: any, placementPlans: Record<string, any>, metricLayoutMode: string, metricMode: string, metricOptions: string[]) {
+  const rowDims: string[] = request.rowDimensions ?? [];
+  const colDims: string[] = request.columnDimensions ?? [];
+
+  const baseCellMap = new Map(cells.map((c: any) => [`${c.rowPath.join("¦")}||${c.columnPath.join("¦")}`, c]));
+
+  const rowKeys = Array.from(new Set(cells.map((c: any) => c.rowPath.join("¦"))));
+  const colKeys = Array.from(new Set(cells.map((c: any) => c.columnPath.join("¦"))));
 
   const derivedKpis = Object.entries(placementPlans ?? {}).filter(([, plan]: any) => plan.displayInjection?.type === "derived_column");
-  if (derivedKpis.length === 0) {
-    return { rowKeys, colKeys: baseColKeys, cellMap: baseCellMap };
-  }
-
-  const derivedCols: string[] = [];
   const derivedCells: any[] = [];
+  const derivedColKeys: string[] = [];
 
   for (const rowKey of rowKeys) {
-    const rowCells = cells.filter((c: any) => c.rowPath.join(" / ") === rowKey);
+    const rowCells = cells.filter((c: any) => c.rowPath.join("¦") === rowKey);
     for (const [kpiId, plan] of derivedKpis as any[]) {
-      const anchor = plan.displayInjection?.anchorDimension;
-      const anchorIndex = anchor ? (plan.colDimsUsed?.length ?? 0) : 0;
+      const colDimsUsed: string[] = plan.colDimsUsed ?? [];
+      const groupMap = new Map<string, any[]>();
 
-      const groups = new Map<string, any[]>();
       for (const cell of rowCells) {
-        const collapsed = new Set(plan.collapsedDimensions ?? []);
-        const keptParts = cell.columnPath.filter((_: any, idx: number) => {
-          const dimId = idx < (cell.columnPath.length) ? null : null;
-          return true;
-        });
-        const groupKey = (plan.colDimsUsed && plan.colDimsUsed.length > 0)
-          ? cell.columnPath.slice(0, plan.colDimsUsed.length).join(" / ")
-          : "__GLOBAL__";
-        if (!groups.has(groupKey)) groups.set(groupKey, []);
-        groups.get(groupKey)!.push(cell);
+        const baseGroup = cell.columnPath.slice(0, colDimsUsed.length).join("¦") || "__GLOBAL__";
+        if (!groupMap.has(baseGroup)) groupMap.set(baseGroup, []);
+        groupMap.get(baseGroup)!.push(cell);
       }
 
-      for (const [groupKey, groupCells] of groups.entries()) {
-        const representative = groupCells.find((g: any) => g.values && g.values[kpiId] !== undefined) ?? groupCells[0];
-        const derivedCol = groupKey === "__GLOBAL__" ? kpiId : `${groupKey} / ${kpiId}`;
-        derivedCols.push(derivedCol);
+      for (const [baseGroup, groupCells] of groupMap.entries()) {
+        const representative = groupCells.find((g: any) => g.values && Object.prototype.hasOwnProperty.call(g.values, kpiId));
+        if (!representative) continue;
+        const derivedPath = baseGroup === "__GLOBAL__" ? [kpiId] : [...baseGroup.split("¦"), kpiId];
+        const derivedColKey = derivedPath.join("¦");
+        derivedColKeys.push(derivedColKey);
         derivedCells.push({
           nodeKey: `${representative.nodeKey}::DERIVED::${kpiId}`,
           rowPath: representative.rowPath,
-          columnPath: derivedCol.split(" / "),
+          columnPath: derivedPath,
           nodeType: representative.nodeType,
           values: { [kpiId]: representative.values[kpiId] ?? null },
           statusByKpi: { [kpiId]: representative.statusByKpi[kpiId] ?? { displayState: "null", reasons: [] } },
@@ -103,12 +112,51 @@ function buildDerivedMatrix(cells: any[], placementPlans: Record<string, any>) {
     }
   }
 
-  const mergedColKeys = Array.from(new Set([...baseColKeys, ...derivedCols]));
   const mergedCellMap = new Map(baseCellMap);
   for (const dc of derivedCells) {
-    mergedCellMap.set(`${dc.rowPath.join(" / ")}||${dc.columnPath.join(" / ")}`, dc);
+    mergedCellMap.set(`${dc.rowPath.join("¦")}||${dc.columnPath.join("¦")}`, dc);
   }
-  return { rowKeys, colKeys: mergedColKeys, cellMap: mergedCellMap };
+
+  const allColKeys = Array.from(new Set([...colKeys, ...derivedColKeys]));
+
+  const grandRowKey = rowKeys.find((r: string) => r.includes("__GRAND_TOTAL__"));
+  const grandColKey = allColKeys.find((c: string) => c.includes("__GRAND_TOTAL__"));
+
+  const normalRowKeys = rowKeys.filter((r: string) => r !== grandRowKey);
+  const subtotalRowKeys = normalRowKeys.filter((r: string) => r.includes("__TOTAL__"));
+  const leafRowKeys = normalRowKeys.filter((r: string) => !r.includes("__TOTAL__"));
+
+  const rowOrder = [...leafRowKeys, ...subtotalRowKeys, ...(grandRowKey ? [grandRowKey] : [])];
+  const colOrder = [
+    ...allColKeys.filter((c: string) => c !== grandColKey && !c.includes("__TOTAL__")),
+    ...allColKeys.filter((c: string) => c.includes("__TOTAL__")),
+    ...(grandColKey ? [grandColKey] : [])
+  ];
+
+  const allMetrics = metricOptions.filter((m: string) => m !== "ALL");
+  const metricSet = metricMode === "ALL" ? allMetrics : [metricMode];
+
+  const displayColumns =
+    metricLayoutMode === "stacked_in_cell"
+      ? colOrder.map((colKey: string) => ({ key: colKey, baseColKey: colKey, metric: null }))
+      : colOrder.flatMap((colKey: string) =>
+          metricSet.map((metric: string) => ({
+            key: `${colKey}||${metric}`,
+            baseColKey: colKey,
+            metric
+          }))
+        );
+
+  return {
+    rowDims,
+    colDims,
+    rowOrder,
+    colOrder,
+    displayColumns,
+    cellMap: mergedCellMap,
+    grandRowKey,
+    grandColKey
+  };
 }
 
 function App() {
@@ -128,16 +176,12 @@ function App() {
   const [traceFilterKpi, setTraceFilterKpi] = useState<string>("ALL");
   const [metricMode, setMetricMode] = useState<string>("ALL");
   const [metricLayoutMode, setMetricLayoutMode] = useState<"stacked_in_cell" | "separate_subcolumns" | "single_metric_focus">("stacked_in_cell");
-  const [cellDensity, setCellDensity] = useState<"compact" | "expanded">("expanded");
-  const [sortRows, setSortRows] = useState<"natural" | "asc" | "desc">("natural");
-  const [sortCols, setSortCols] = useState<"natural" | "asc" | "desc">("natural");
-  const [hideEmptyRows, setHideEmptyRows] = useState(false);
-  const [hideEmptyCols, setHideEmptyCols] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [matrixFullscreen, setMatrixFullscreen] = useState(false);
   const [editorMode, setEditorMode] = useState<"pivot" | "kpis">("pivot");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [grandTotalMode, setGrandTotalMode] = useState<"none" | "row" | "column" | "both">("both");
+  const [subTotalMode, setSubTotalMode] = useState<"none" | "row" | "column" | "both">("both");
 
   const activeInput = useMemo(() => {
     if (useCustom && customPayload && customMetadata && customRequest) {
@@ -157,9 +201,6 @@ function App() {
     }
   }, [activeInput, validationErrors]);
 
-  const allDimensions = useMemo(() => Object.keys(activeInput.metadata?.dimensions ?? {}), [activeInput]);
-  const allKpis = useMemo(() => Object.keys(activeInput.metadata?.kpis ?? {}), [activeInput]);
-
   const selectedCell = useMemo(() => {
     if (!result || "__error" in result || !selectedNodeKey) return null;
     return result.matrix.cells.find((c: any) => c.nodeKey === selectedNodeKey) ?? null;
@@ -171,116 +212,27 @@ function App() {
     return selectedCell.explainability.executionTrace.filter((t: any) => t.kpiId === traceFilterKpi || !t.kpiId);
   }, [selectedCell, traceFilterKpi]);
 
+  const allDimensions = useMemo(() => Object.keys(activeInput.metadata?.dimensions ?? {}), [activeInput]);
+  const allKpis = useMemo(() => Object.keys(activeInput.metadata?.kpis ?? {}), [activeInput]);
+
   const metricOptions = useMemo(() => {
     if (!result || "__error" in result || result.matrix.cells.length === 0) return ["ALL"];
-    const metrics = Array.from(new Set(result.matrix.cells.flatMap((c: any) => Object.keys(c.values))));
-    return ["ALL", ...metrics];
+    return ["ALL", ...Array.from(new Set(result.matrix.cells.flatMap((c: any) => Object.keys(c.values))))];
   }, [result]);
 
   const matrixModel = useMemo(() => {
     if (!result || "__error" in result) return null;
-    const placementPlans = (result.executionMeta as any).placementPlans ?? {};
-    const derived = buildDerivedMatrix(result.matrix.cells, placementPlans);
+    return buildMatrix(result.matrix.cells, activeInput.request, (result.executionMeta as any).placementPlans ?? {}, metricLayoutMode, metricMode, metricOptions);
+  }, [result, activeInput.request, metricLayoutMode, metricMode, metricOptions]);
 
-    let rowKeys = [...derived.rowKeys];
-    let colKeys = [...derived.colKeys];
-
-    const grandRow = rowKeys.find((r: string) => r.includes("__GRAND_TOTAL__"));
-    const grandCol = colKeys.find((c: string) => c.includes("__GRAND_TOTAL__"));
-    const normalRows = rowKeys.filter((r: string) => r !== grandRow);
-    const normalCols = colKeys.filter((c: string) => c !== grandCol);
-
-    const sorter = (dir: "asc" | "desc") => (a: string, b: string) => dir === "asc" ? a.localeCompare(b) : b.localeCompare(a);
-    if (sortRows !== "natural") normalRows.sort(sorter(sortRows));
-    if (sortCols !== "natural") normalCols.sort(sorter(sortCols));
-    rowKeys = grandRow ? [...normalRows, grandRow] : normalRows;
-    colKeys = grandCol ? [...normalCols, grandCol] : normalCols;
-
-    const rowGroups = new Map<string, string[]>();
-    for (const row of rowKeys) {
-      const group = row.split(" / ")[0] ?? row;
-      if (!rowGroups.has(group)) rowGroups.set(group, []);
-      rowGroups.get(group)!.push(row);
-    }
-
-    let visibleRows: string[] = [];
-    for (const [group, rows] of rowGroups.entries()) {
-      visibleRows.push(group);
-      if (!collapsedGroups[group]) visibleRows.push(...rows.filter(r => r !== group));
-    }
-
-    if (hideEmptyRows) {
-      visibleRows = visibleRows.filter((rowKey: string) => {
-        if (rowGroups.has(rowKey)) return true;
-        return colKeys.some((colKey: string) => {
-          const cell = derived.cellMap.get(`${rowKey}||${colKey}`);
-          if (!cell) return false;
-          const values = metricMode === "ALL" ? Object.values(cell.values) : [cell.values[metricMode]];
-          return values.some(isMeaningfulValue);
-        });
-      });
-    }
-
-    if (hideEmptyCols) {
-      colKeys = colKeys.filter((colKey: string) => {
-        if (colKey === grandCol) return true;
-        return rowKeys.some((rowKey: string) => {
-          const cell = derived.cellMap.get(`${rowKey}||${colKey}`);
-          if (!cell) return false;
-          const values = metricMode === "ALL" ? Object.values(cell.values) : [cell.values[metricMode]];
-          return values.some(isMeaningfulValue);
-        });
-      });
-    }
-
-    return { rowKeys, colKeys, visibleRows, rowGroups, cellMap: derived.cellMap, grandRow, grandCol };
-  }, [result, sortRows, sortCols, hideEmptyRows, hideEmptyCols, collapsedGroups, metricMode]);
-
-
-  const displayColumns = useMemo(() => {
-    if (!matrixModel || !result || "__error" in result) return [];
-    const allMetrics = metricMode === "ALL"
-      ? metricOptions.filter((m: string) => m !== "ALL")
-      : metricMode === "ALL"
-        ? []
-        : [metricMode];
-
-    if (metricLayoutMode === "stacked_in_cell") {
-      return matrixModel.colKeys.map((col: string) => ({
-        key: col,
-        baseCol: col,
-        metric: null,
-        headerLabel: col,
-        isGrand: col === matrixModel.grandCol
-      }));
-    }
-
-    if (metricLayoutMode === "single_metric_focus") {
-      const metric = metricMode === "ALL" ? (metricOptions.find((m: string) => m !== "ALL") ?? null) : metricMode;
-      return matrixModel.colKeys.map((col: string) => ({
-        key: `${col}||${metric ?? "metric"}`,
-        baseCol: col,
-        metric,
-        headerLabel: metric ? `${col} / ${metric}` : col,
-        isGrand: col === matrixModel.grandCol
-      }));
-    }
-
-    const metrics = allMetrics.length > 0 ? allMetrics : (metricOptions.filter((m: string) => m !== "ALL"));
-    const cols: any[] = [];
-    for (const col of matrixModel.colKeys) {
-      for (const metric of metrics) {
-        cols.push({
-          key: `${col}||${metric}`,
-          baseCol: col,
-          metric,
-          headerLabel: `${col} / ${metric}`,
-          isGrand: col === matrixModel.grandCol
-        });
-      }
-    }
-    return cols;
-  }, [matrixModel, result, metricLayoutMode, metricMode, metricOptions]);
+  function syncTotalModes(nextRequest: any) {
+    const rowSubtotalOn = nextRequest.totalOptions.rowSubtotalDimensions.length > 0;
+    const colSubtotalOn = nextRequest.totalOptions.columnSubtotalDimensions.length > 0;
+    const rowGrandOn = !!nextRequest.totalOptions.showRowTotals;
+    const colGrandOn = !!nextRequest.totalOptions.showColumnTotals;
+    setSubTotalMode(rowSubtotalOn && colSubtotalOn ? "both" : rowSubtotalOn ? "row" : colSubtotalOn ? "column" : "none");
+    setGrandTotalMode(rowGrandOn && colGrandOn ? "both" : rowGrandOn ? "row" : colGrandOn ? "column" : "none");
+  }
 
   function loadBuiltIn(index: number) {
     const ex = examples[index];
@@ -289,6 +241,7 @@ function App() {
     setWorkingPayload(clone(ex.payload));
     setWorkingMetadata(clone(ex.metadata));
     setWorkingRequest(clone(ex.request));
+    syncTotalModes(clone(ex.request));
     setSelectedNodeKey(null);
     setTraceFilterKpi("ALL");
     setMessage(`Loaded built-in example: ${examples[index].name}`);
@@ -301,7 +254,10 @@ function App() {
       const parsed = await readJsonFile(file);
       if (kind === "payload") setCustomPayload(parsed);
       if (kind === "metadata") setCustomMetadata(parsed);
-      if (kind === "request") setCustomRequest(parsed);
+      if (kind === "request") {
+        setCustomRequest(parsed);
+        syncTotalModes(parsed);
+      }
       setMessage(`${kind} uploaded successfully.`);
       setError("");
     } catch (e) {
@@ -322,43 +278,46 @@ function App() {
     setError("");
   }
 
-  function toggleGroup(group: string) {
-    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  function updateRequest(mutator: (draft: any) => void) {
+    setWorkingRequest((prev: any) => {
+      const next = clone(prev);
+      mutator(next);
+      syncTotalModes(next);
+      return next;
+    });
   }
 
   function moveDimensionToRow(dim: string) {
-    setWorkingRequest((prev: any) => {
-      const next = clone(prev);
+    updateRequest((next) => {
       next.columnDimensions = next.columnDimensions.filter((d: string) => d !== dim);
       if (!next.rowDimensions.includes(dim)) next.rowDimensions.push(dim);
-      return next;
+      next.totalOptions.rowSubtotalDimensions = next.totalOptions.rowSubtotalDimensions.filter((d: string) => next.rowDimensions.includes(d));
+      next.totalOptions.columnSubtotalDimensions = next.totalOptions.columnSubtotalDimensions.filter((d: string) => next.columnDimensions.includes(d));
     });
   }
 
   function moveDimensionToColumn(dim: string) {
-    setWorkingRequest((prev: any) => {
-      const next = clone(prev);
+    updateRequest((next) => {
       next.rowDimensions = next.rowDimensions.filter((d: string) => d !== dim);
       if (!next.columnDimensions.includes(dim)) next.columnDimensions.push(dim);
-      return next;
+      next.totalOptions.rowSubtotalDimensions = next.totalOptions.rowSubtotalDimensions.filter((d: string) => next.rowDimensions.includes(d));
+      next.totalOptions.columnSubtotalDimensions = next.totalOptions.columnSubtotalDimensions.filter((d: string) => next.columnDimensions.includes(d));
     });
   }
 
   function removeFromAxes(dim: string) {
-    setWorkingRequest((prev: any) => {
-      const next = clone(prev);
+    updateRequest((next) => {
       next.rowDimensions = next.rowDimensions.filter((d: string) => d !== dim);
       next.columnDimensions = next.columnDimensions.filter((d: string) => d !== dim);
-      return next;
+      next.totalOptions.rowSubtotalDimensions = next.totalOptions.rowSubtotalDimensions.filter((d: string) => d !== dim);
+      next.totalOptions.columnSubtotalDimensions = next.totalOptions.columnSubtotalDimensions.filter((d: string) => d !== dim);
     });
   }
 
   function toggleKpiSelection(kpiId: string) {
-    setWorkingRequest((prev: any) => {
-      const next = clone(prev);
+    updateRequest((next) => {
       if (next.selectedKpis.includes(kpiId)) next.selectedKpis = next.selectedKpis.filter((k: string) => k !== kpiId);
       else next.selectedKpis.push(kpiId);
-      return next;
     });
   }
 
@@ -392,69 +351,74 @@ function App() {
     });
   }
 
+  function applyGrandTotalMode(mode: "none" | "row" | "column" | "both") {
+    setGrandTotalMode(mode);
+    updateRequest((next) => {
+      next.totalOptions.showRowTotals = mode === "row" || mode === "both";
+      next.totalOptions.showColumnTotals = mode === "column" || mode === "both";
+      next.totalOptions.showGrandTotal = mode !== "none";
+    });
+  }
+
+  function applySubTotalMode(mode: "none" | "row" | "column" | "both") {
+    setSubTotalMode(mode);
+    updateRequest((next) => {
+      next.totalOptions.rowSubtotalDimensions = mode === "row" || mode === "both" ? [...next.rowDimensions] : [];
+      next.totalOptions.columnSubtotalDimensions = mode === "column" || mode === "both" ? [...next.columnDimensions] : [];
+    });
+  }
+
   const isExecutionError = result && "__error" in result;
 
   const matrixTable = matrixModel ? (
     <div className="matrixWrap" style={matrixFullscreen ? { maxHeight: "none", height: "100%" } : {}}>
-      <table className={`matrix ${cellDensity}`}>
+      <table className="matrix">
         <thead>
           <tr>
-            <th>Row \ Column</th>
-            {matrixModel.colKeys.map((col: string) => (
-              <th key={col} className={col === matrixModel.grandCol ? "pinnedGrandCol" : ""}>{col}</th>
-            ))}
+            {matrixModel.rowDims.map((dim: string) => <th key={dim}>{dim}</th>)}
+            {matrixModel.displayColumns.map((dc: any) => {
+              const pathParts = dc.baseColKey.split("¦");
+              const labelBase = pathParts.map((part: string, idx: number) => formatPathPart(part, "column", matrixModel.colDims[Math.min(idx, matrixModel.colDims.length - 1)] ?? "Column")).join(" / ");
+              const label = dc.metric ? `${labelBase} / ${dc.metric}` : labelBase;
+              return <th key={dc.key}>{label}</th>;
+            })}
           </tr>
         </thead>
         <tbody>
-          {matrixModel.visibleRows.map((row: string) => {
-            const isGroupHeader = matrixModel.rowGroups.has(row);
-            const isGrandRow = row === matrixModel.grandRow;
-
-            if (isGroupHeader) {
-              const collapsed = !!collapsedGroups[row];
-              return (
-                <tr key={`group-${row}`} className="groupRow">
-                  <td colSpan={matrixModel.colKeys.length + 1}>
-                    <button className="groupButton" onClick={() => toggleGroup(row)}>
-                      {collapsed ? "▶" : "▼"} {row}
-                    </button>
-                  </td>
-                </tr>
-              );
-            }
-
+          {matrixModel.rowOrder.map((rowKey: string) => {
+            const rowParts = rowKey.split("¦");
+            const isGrandRow = rowKey === matrixModel.grandRowKey;
             return (
-              <tr key={row} className={isGrandRow ? "grandRow" : ""}>
-                <td className={isGrandRow ? "pinnedGrandCol" : ""}>
-                  <div className="indent"><strong>{row}</strong></div>
-                </td>
-                {matrixModel.colKeys.map((col: string) => {
-                  const cell = matrixModel.cellMap.get(`${row}||${col}`);
-                  if (!cell) return <td key={`${row}-${col}`} className={col === matrixModel.grandCol ? "pinnedGrandCol" : ""}></td>;
-
+              <tr key={rowKey} className={isGrandRow ? "grandRow" : rowKey.includes("__TOTAL__") ? "subtotalRow" : ""}>
+                {matrixModel.rowDims.map((dim: string, idx: number) => {
+                  const raw = rowParts[idx] ?? "";
+                  const label = formatPathPart(raw, "row", dim);
+                  return <td key={`${rowKey}-${dim}`}><strong>{label}</strong></td>;
+                })}
+                {matrixModel.displayColumns.map((dc: any) => {
+                  const cell = matrixModel.cellMap.get(`${rowKey}||${dc.baseColKey}`);
+                  if (!cell) return <td key={`${rowKey}-${dc.key}`}></td>;
                   const selected = selectedNodeKey === cell.nodeKey;
-                  const metricsToShow = metricMode === "ALL"
-                    ? Object.entries(cell.values)
-                    : Object.entries(cell.values).filter(([metric]) => metric === metricMode);
-
+                  const entries = dc.metric
+                    ? Object.entries(cell.values).filter(([metric]) => metric === dc.metric)
+                    : (metricMode === "ALL" ? Object.entries(cell.values) : Object.entries(cell.values).filter(([metric]) => metric === metricMode));
                   return (
                     <td
-                      key={`${row}-${col}`}
-                      className={`clickable ${nodeTypeClass(cell.nodeType)} ${selected ? "selectedCell" : ""} ${col === matrixModel.grandCol ? "pinnedGrandCol" : ""}`}
+                      key={`${rowKey}-${dc.key}`}
+                      className={`${nodeTypeClass(cell.nodeType)} ${selected ? "selectedCell" : ""}`}
                       onClick={() => setSelectedNodeKey(cell.nodeKey)}
                     >
                       <div className="cellBox">
-                        {metricsToShow.map(([metric, value]) => {
+                        {entries.map(([metric, value]) => {
                           const status = cell.statusByKpi[metric];
                           return (
-                            <div className="metric" key={metric}>
-                              <span className="metric-title">{metric}:</span>{" "}
+                            <div className="metric" key={`${dc.key}-${metric}`}>
+                              {!dc.metric ? <span className="metric-title">{metric}: </span> : null}
                               <span>{formatValue(value)}</span>
                               {status ? <span className={`badge status-${status.displayState}`}>{status.displayState}</span> : null}
                             </div>
                           );
                         })}
-                        <div className="small">{cell.nodeType}</div>
                       </div>
                     </td>
                   );
@@ -497,33 +461,20 @@ function App() {
         .kpiGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         table { width: 100%; border-collapse: collapse; background: white; }
         th, td { border: 1px solid #dbe3ef; padding: 8px 10px; vertical-align: top; }
-        th { background: #eef3fb; text-align: left; position: sticky; top: 0; z-index: 4; }
-        .matrix th:first-child, .matrix td:first-child { position: sticky; left: 0; z-index: 3; }
-        .matrix th:first-child { background: #eef3fb; }
-        .matrix td:first-child { background: #fff; }
-        .pinnedGrandCol { position: sticky; right: 0; z-index: 2; background: #eef6ff !important; }
-        .grandRow td { position: sticky; bottom: 0; z-index: 2; background: #eef6ff !important; font-weight: 700; }
-        .grandRow td:first-child { z-index: 5; }
+        th { background: #eef3fb; text-align: left; position: sticky; top: 0; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-left: 6px; background: #eef3fb; }
         .status-normal { color: #166534; }
         .status-warning { color: #a16207; }
         .status-suppressed, .status-null { color: #6b7280; }
         .metric { margin-bottom: 6px; }
         .metric-title { font-weight: 600; }
-        .clickable { cursor: pointer; }
-        .clickable:hover { background: #f8fbff; }
         .emptyState { color: #6b7280; font-size: 14px; }
         .matrixWrap { overflow: auto; max-height: 75vh; border: 1px solid #e5ebf3; border-radius: 8px; }
-        .cellBox { min-width: 150px; }
-        .compact .metric { margin-bottom: 2px; font-size: 12px; }
-        .expanded .metric { margin-bottom: 6px; font-size: 13px; }
+        .cellBox { min-width: 130px; }
         .selectedCell { outline: 3px solid #1d4ed8; outline-offset: -3px; }
-        .node-subtotal { background: linear-gradient(90deg, #f8fbff 0%, #ffffff 100%); }
-        .node-grand { background: #eef6ff; font-weight: 700; }
+        .node-subtotal, .subtotalRow td { background: #f8fbff; }
+        .node-grand, .grandRow td { background: #eef6ff; font-weight: 700; }
         .legendGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-        .groupRow td { background: #f9fafb; font-weight: 700; }
-        .groupButton { all: unset; cursor: pointer; color: #1d4ed8; font-weight: 700; }
-        .indent { padding-left: 18px; }
         .matrixFullscreenOverlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 50; display: flex; }
         .matrixFullscreenPanel { background: white; margin: 16px; border-radius: 12px; border: 1px solid #dbe3ef; display: flex; flex-direction: column; width: calc(100vw - 32px); height: calc(100vh - 32px); overflow: hidden; }
         .matrixFullscreenHeader { padding: 12px 16px; border-bottom: 1px solid #e5ebf3; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
@@ -531,7 +482,7 @@ function App() {
       `}</style>
 
       <div className="title">Axis-Aware KPI Compute Engine Playground</div>
-      <div className="subtitle">True consolidation rebuild: preserved examples, 10k example pack in repo, placement planner, pivot editor, KPI metadata editor, fullscreen matrix, planner-driven derived KPI column injection, and metric sub-column mode in matrix assembly.</div>
+      <div className="subtitle">Fixed matrix viewer with Product × Scenario report, large-volume built-in option, working metric sub-column mode, separate row-dimension columns, cleaner total labels/order, and explicit subtotal/grand-total controls.</div>
 
       <div className="layout">
         <div className="panel">
@@ -567,6 +518,23 @@ function App() {
               <div className="axisList">{workingRequest.rowDimensions.map((d: string) => <span key={d} className="pill">{d}</span>)}</div>
               <div className="sectionTitle">Current column dimensions</div>
               <div className="axisList">{workingRequest.columnDimensions.map((d: string) => <span key={d} className="pill">{d}</span>)}</div>
+
+              <div className="sectionTitle">Grand Total controls</div>
+              <select value={grandTotalMode} onChange={(e) => applyGrandTotalMode(e.target.value as any)}>
+                <option value="none">None</option>
+                <option value="row">Row</option>
+                <option value="column">Column</option>
+                <option value="both">Both</option>
+              </select>
+
+              <div className="sectionTitle">Subtotal controls</div>
+              <select value={subTotalMode} onChange={(e) => applySubTotalMode(e.target.value as any)}>
+                <option value="none">None</option>
+                <option value="row">Row</option>
+                <option value="column">Column</option>
+                <option value="both">Both</option>
+              </select>
+
               <div className="sectionTitle">Dimension placement controls</div>
               {allDimensions.map((dim: string) => (
                 <div className="dimRow" key={dim}>
@@ -577,15 +545,6 @@ function App() {
                     <button onClick={() => moveDimensionToColumn(dim)}>To Column</button>
                     <button onClick={() => removeFromAxes(dim)}>Unused</button>
                   </div>
-                </div>
-              ))}
-              <div className="sectionTitle">Selected KPIs</div>
-              <div className="axisList">{workingRequest.selectedKpis.map((k: string) => <span key={k} className="pill">{k}</span>)}</div>
-              <div className="sectionTitle">KPI inclusion controls</div>
-              {allKpis.map((kpiId: string) => (
-                <div className="toggleCard" key={kpiId}>
-                  <label style={{marginBottom: 4}}>{kpiId}</label>
-                  <input type="checkbox" checked={workingRequest.selectedKpis.includes(kpiId)} onChange={() => toggleKpiSelection(kpiId)} />
                 </div>
               ))}
             </>
@@ -622,20 +581,6 @@ function App() {
                         </select>
                       </div>
                     </div>
-                    <div className="kpiGrid">
-                      <div className="toggleCard">
-                        <label>Valid At Leaf</label>
-                        <input type="checkbox" checked={!!k.validAtLeaf} onChange={(e) => updateKpiField(kpiId, "validAtLeaf", e.target.checked)} />
-                      </div>
-                      <div className="toggleCard">
-                        <label>Valid At Subtotal</label>
-                        <input type="checkbox" checked={!!k.validAtSubtotal} onChange={(e) => updateKpiField(kpiId, "validAtSubtotal", e.target.checked)} />
-                      </div>
-                    </div>
-                    <div className="toggleCard">
-                      <label>Valid At Grand Total</label>
-                      <input type="checkbox" checked={!!k.validAtGrandTotal} onChange={(e) => updateKpiField(kpiId, "validAtGrandTotal", e.target.checked)} />
-                    </div>
                   </div>
                 );
               })}
@@ -652,18 +597,16 @@ function App() {
           {!matrixModel || isExecutionError ? null : (
             <>
               <div className="small" style={{marginBottom: 12}}>
-                <div><strong>Mode:</strong> {useCustom ? "Custom Upload" : `Built-in — ${builtIn.name}`}</div>
+                <div><strong>Mode:</strong> {useCustom ? "Custom Upload" : examples[selectedIndex].name}</div>
                 <div><strong>Plan Version:</strong> {result.executionMeta.planVersion}</div>
-                <div><strong>Slice Signature:</strong> {result.executionMeta.sliceSignature}</div>
-                <div><strong>Visible rows:</strong> {matrixModel.visibleRows.length} &nbsp; <strong>Visible columns:</strong> {matrixModel.colKeys.length}</div>
+                <div><strong>Rows:</strong> {matrixModel.rowOrder.length} &nbsp; <strong>Columns:</strong> {matrixModel.displayColumns.length}</div>
               </div>
 
               <div className="legendGrid">
-                <div className="legendItem"><strong>Leaf</strong> standard analytical cell</div>
-                <div className="legendItem"><strong>Subtotal band</strong> tinted subtotal cell and grouped row band</div>
-                <div className="legendItem"><strong>Grand total</strong> pinned right column and bottom row</div>
-                <div className="legendItem"><strong>Derived KPI columns</strong> injected automatically from placement plans</div>
-                <div className="legendItem"><strong>Metric sub-columns</strong> optional matrix mode expands each base column into per-metric sub-columns</div>
+                <div className="legendItem"><strong>Separate row dimension columns</strong> each row axis dimension now has its own visible column</div>
+                <div className="legendItem"><strong>Metric sub-column mode</strong> each measure/KPI can expand into its own separate matrix column</div>
+                <div className="legendItem"><strong>Total labels</strong> subtotal labels use the dimension name, such as Month Total</div>
+                <div className="legendItem"><strong>Derived KPI placement</strong> planner-driven derived KPI columns remain supported</div>
               </div>
 
               <div className="toolbarGrid3">
@@ -681,45 +624,6 @@ function App() {
                     <option value="single_metric_focus">single_metric_focus</option>
                   </select>
                 </div>
-                <div>
-                  <label>Cell density</label>
-                  <select value={cellDensity} onChange={(e) => setCellDensity(e.target.value as any)}>
-                    <option value="expanded">Expanded</option>
-                    <option value="compact">Compact</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="toolbarGrid3">
-                <div>
-                  <label>Row sort</label>
-                  <select value={sortRows} onChange={(e) => setSortRows(e.target.value as any)}>
-                    <option value="natural">Natural</option>
-                    <option value="asc">A → Z</option>
-                    <option value="desc">Z → A</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label>Column sort</label>
-                  <select value={sortCols} onChange={(e) => setSortCols(e.target.value as any)}>
-                    <option value="natural">Natural</option>
-                    <option value="asc">A → Z</option>
-                    <option value="desc">Z → A</option>
-                  </select>
-                </div>
-                <div className="toggleCard">
-                  <label style={{marginBottom: 4}}>Hide empty rows</label>
-                  <input type="checkbox" checked={hideEmptyRows} onChange={(e) => setHideEmptyRows(e.target.checked)} />
-                </div>
-                <div className="toggleCard">
-                  <label style={{marginBottom: 4}}>Hide empty columns</label>
-                  <input type="checkbox" checked={hideEmptyCols} onChange={(e) => setHideEmptyCols(e.target.checked)} />
-                </div>
-              </div>
-
-              <div className="toolbarGrid">
-                <div></div>
                 <div>
                   <label>Matrix view</label>
                   <button className="secondary" onClick={() => setMatrixFullscreen(true)}>Open full screen matrix</button>
@@ -755,20 +659,8 @@ function App() {
               <div className="sectionTitle">Context</div>
               <div className="code">{JSON.stringify(selectedCell.explainability.context, null, 2)}</div>
 
-              <div className="sectionTitle">Formulas by KPI</div>
-              <div className="code">{JSON.stringify(selectedCell.explainability.formulasByKpi, null, 2)}</div>
-
               <div className="sectionTitle">Values</div>
               <div className="code">{JSON.stringify(selectedCell.explainability.values, null, 2)}</div>
-
-              <div className="sectionTitle">Warnings</div>
-              <div className="code">{JSON.stringify(selectedCell.explainability.warnings, null, 2)}</div>
-
-              <div className="sectionTitle">Missing References</div>
-              <div className="code">{JSON.stringify(selectedCell.explainability.missingReferences, null, 2)}</div>
-
-              <div className="sectionTitle">Drill-through Records</div>
-              <div className="code">{JSON.stringify(selectedCell.explainability.contributingRecords, null, 2)}</div>
 
               <div className="sectionTitle">Per-KPI Trace Filter</div>
               <select value={traceFilterKpi} onChange={(e) => setTraceFilterKpi(e.target.value)}>
@@ -791,7 +683,7 @@ function App() {
             <div className="matrixFullscreenHeader">
               <div>
                 <strong>Full Screen Matrix</strong>
-                <div className="small">Interactive analytical grid with sticky headers, pinned totals, sorting, collapse, and planner-driven derived KPI columns.</div>
+                <div className="small">Large analytical matrix view.</div>
               </div>
               <button onClick={() => setMatrixFullscreen(false)}>Close full screen</button>
             </div>
