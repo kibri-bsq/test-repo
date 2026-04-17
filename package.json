@@ -7,10 +7,6 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "dev:web": "pnpm --filter web dev",
-    "deploy:pages": "pnpm --filter web build && gh-pages -d apps/web/dist"
-  },
-  "devDependencies": {
-    "gh-pages": "^6.3.0"
+    "dev:web": "pnpm --filter web dev"
   }
 }
