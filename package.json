@@ -1,0 +1,16 @@
+{
+  "name": "kpi-compute-engine-full-consolidated-audit-v2",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev:web": "pnpm --filter web dev",
+    "deploy:pages": "pnpm --filter web build && gh-pages -d apps/web/dist"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  }
+}

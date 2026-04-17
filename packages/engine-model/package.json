@@ -1,0 +1,9 @@
+{
+  "name": "@engine/engine-model",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": { "@engine/contracts": "workspace:*" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "echo no-tests" }
+}

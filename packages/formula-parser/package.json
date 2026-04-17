@@ -1,0 +1,9 @@
+{
+  "name": "@engine/formula-parser",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "devDependencies": { "vitest": "^2.1.4" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" }
+}

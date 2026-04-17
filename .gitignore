@@ -1,0 +1,12 @@
+node_modules/
+dist/
+pnpm-debug.log*
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.local
+
+.idea/

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Full Consolidated Audit Runtime v2</title>
+    <style>
+      body { margin: 0; font-family: Arial, sans-serif; background: #f6f8fb; color: #1f2937; }
+      #root { padding: 20px; }
+      .layout { display: grid; grid-template-columns: 320px 1fr 420px; gap: 20px; }
+      .panel { background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; padding: 16px; min-height: 240px; }
+      .title { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+      .subtitle { color: #52637a; margin-bottom: 18px; }
+      label { display: block; font-weight: 600; margin-bottom: 6px; }
+      select, button, input[type=file] {
+        width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 10px;
+        border: 1px solid #c9d3e2; border-radius: 8px; background: #fff;
+      }
+      button { cursor: pointer; background: #1d4ed8; color: white; border: none; }
+      button.secondary { background: #eef3fb; color: #1f2937; border: 1px solid #d6ddea; }
+      .button-grid { display: grid; gap: 8px; }
+      .error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 10px; border-radius: 8px; margin-bottom: 12px; white-space: pre-wrap; }
+      .success { background: #effcf3; color: #166534; border: 1px solid #bbf7d0; padding: 10px; border-radius: 8px; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; background: white; }
+      th, td { border: 1px solid #dbe3ef; padding: 8px 10px; vertical-align: top; }
+      th { background: #eef3fb; text-align: left; position: sticky; top: 0; }
+      .matrix th:first-child, .matrix td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
+      .matrix th:first-child { background: #eef3fb; z-index: 2; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; margin-left: 6px; background: #eef3fb; }
+      .status-normal { color: #166534; }
+      .status-warning { color: #a16207; }
+      .status-suppressed, .status-null { color: #6b7280; }
+      .metric { margin-bottom: 6px; }
+      .metric-title { font-weight: 600; }
+      .small { font-size: 12px; color: #5b6b82; }
+      .clickable { cursor: pointer; }
+      .clickable:hover { background: #f8fbff; }
+      .sectionTitle { font-weight: 700; margin-top: 12px; margin-bottom: 6px; }
+      .code { font-family: Consolas, monospace; background: #f6f8fb; padding: 8px; border-radius: 8px; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; }
+      .emptyState { color: #6b7280; font-size: 14px; }
+      .matrixWrap { overflow: auto; max-height: 75vh; }
+      .cellBox { min-width: 160px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

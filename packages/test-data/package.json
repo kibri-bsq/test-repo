@@ -1,0 +1,12 @@
+{
+  "name": "@engine/test-data",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@engine/contracts": "workspace:*",
+    "@engine/engine-model": "workspace:*"
+  },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "echo no-tests" }
+}
