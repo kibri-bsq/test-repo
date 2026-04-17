@@ -127,6 +127,7 @@ function App() {
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [traceFilterKpi, setTraceFilterKpi] = useState<string>("ALL");
   const [metricMode, setMetricMode] = useState<string>("ALL");
+  const [metricLayoutMode, setMetricLayoutMode] = useState<"stacked_in_cell" | "separate_subcolumns" | "single_metric_focus">("stacked_in_cell");
   const [cellDensity, setCellDensity] = useState<"compact" | "expanded">("expanded");
   const [sortRows, setSortRows] = useState<"natural" | "asc" | "desc">("natural");
   const [sortCols, setSortCols] = useState<"natural" | "asc" | "desc">("natural");
@@ -234,6 +235,52 @@ function App() {
 
     return { rowKeys, colKeys, visibleRows, rowGroups, cellMap: derived.cellMap, grandRow, grandCol };
   }, [result, sortRows, sortCols, hideEmptyRows, hideEmptyCols, collapsedGroups, metricMode]);
+
+
+  const displayColumns = useMemo(() => {
+    if (!matrixModel || !result || "__error" in result) return [];
+    const allMetrics = metricMode === "ALL"
+      ? metricOptions.filter((m: string) => m !== "ALL")
+      : metricMode === "ALL"
+        ? []
+        : [metricMode];
+
+    if (metricLayoutMode === "stacked_in_cell") {
+      return matrixModel.colKeys.map((col: string) => ({
+        key: col,
+        baseCol: col,
+        metric: null,
+        headerLabel: col,
+        isGrand: col === matrixModel.grandCol
+      }));
+    }
+
+    if (metricLayoutMode === "single_metric_focus") {
+      const metric = metricMode === "ALL" ? (metricOptions.find((m: string) => m !== "ALL") ?? null) : metricMode;
+      return matrixModel.colKeys.map((col: string) => ({
+        key: `${col}||${metric ?? "metric"}`,
+        baseCol: col,
+        metric,
+        headerLabel: metric ? `${col} / ${metric}` : col,
+        isGrand: col === matrixModel.grandCol
+      }));
+    }
+
+    const metrics = allMetrics.length > 0 ? allMetrics : (metricOptions.filter((m: string) => m !== "ALL"));
+    const cols: any[] = [];
+    for (const col of matrixModel.colKeys) {
+      for (const metric of metrics) {
+        cols.push({
+          key: `${col}||${metric}`,
+          baseCol: col,
+          metric,
+          headerLabel: `${col} / ${metric}`,
+          isGrand: col === matrixModel.grandCol
+        });
+      }
+    }
+    return cols;
+  }, [matrixModel, result, metricLayoutMode, metricMode, metricOptions]);
 
   function loadBuiltIn(index: number) {
     const ex = examples[index];
@@ -484,7 +531,7 @@ function App() {
       `}</style>
 
       <div className="title">Axis-Aware KPI Compute Engine Playground</div>
-      <div className="subtitle">True consolidation rebuild: preserved examples, 10k example pack in repo, placement planner, pivot editor, KPI metadata editor, fullscreen matrix, and planner-driven derived KPI column injection.</div>
+      <div className="subtitle">True consolidation rebuild: preserved examples, 10k example pack in repo, placement planner, pivot editor, KPI metadata editor, fullscreen matrix, planner-driven derived KPI column injection, and metric sub-column mode in matrix assembly.</div>
 
       <div className="layout">
         <div className="panel">
@@ -616,6 +663,7 @@ function App() {
                 <div className="legendItem"><strong>Subtotal band</strong> tinted subtotal cell and grouped row band</div>
                 <div className="legendItem"><strong>Grand total</strong> pinned right column and bottom row</div>
                 <div className="legendItem"><strong>Derived KPI columns</strong> injected automatically from placement plans</div>
+                <div className="legendItem"><strong>Metric sub-columns</strong> optional matrix mode expands each base column into per-metric sub-columns</div>
               </div>
 
               <div className="toolbarGrid3">
@@ -626,12 +674,23 @@ function App() {
                   </select>
                 </div>
                 <div>
+                  <label>Metric layout mode</label>
+                  <select value={metricLayoutMode} onChange={(e) => setMetricLayoutMode(e.target.value as any)}>
+                    <option value="stacked_in_cell">stacked_in_cell</option>
+                    <option value="separate_subcolumns">separate_subcolumns</option>
+                    <option value="single_metric_focus">single_metric_focus</option>
+                  </select>
+                </div>
+                <div>
                   <label>Cell density</label>
                   <select value={cellDensity} onChange={(e) => setCellDensity(e.target.value as any)}>
                     <option value="expanded">Expanded</option>
                     <option value="compact">Compact</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="toolbarGrid3">
                 <div>
                   <label>Row sort</label>
                   <select value={sortRows} onChange={(e) => setSortRows(e.target.value as any)}>
@@ -640,9 +699,7 @@ function App() {
                     <option value="desc">Z → A</option>
                   </select>
                 </div>
-              </div>
 
-              <div className="toolbarGrid3">
                 <div>
                   <label>Column sort</label>
                   <select value={sortCols} onChange={(e) => setSortCols(e.target.value as any)}>

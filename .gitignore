@@ -10,3 +10,4 @@ pnpm-debug.log*
 *.local
 
 .idea/
+.pnpm-store/
