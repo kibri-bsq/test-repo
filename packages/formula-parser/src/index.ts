@@ -1,5 +1,5 @@
 export type TokenType =
-  | "IDENT" | "NUMBER" | "PLUS" | "MINUS" | "STAR" | "SLASH"
+  | "IDENT" | "NUMBER" | "STRING" | "PLUS" | "MINUS" | "STAR" | "SLASH"
   | "LPAREN" | "RPAREN" | "LBRACKET" | "RBRACKET" | "COMMA" | "EQUALS";
 
 export interface Token { type: TokenType; value: string; }
@@ -14,7 +14,7 @@ export type AstNode =
   | { kind: "binaryOperation"; operator: "+" | "-" | "*" | "/"; left: AstNode; right: AstNode }
   | { kind: "functionCall"; functionName: string; args: AstNode[] };
 
-const TOKEN_REGEX = /\s*([A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|\+|\-|\*|\/|\(|\)|\[|\]|,|=)\s*/gy;
+const TOKEN_REGEX = /\s*("[^"]*"|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|\+|\-|\*|\/|\(|\)|\[|\]|,|=)\s*/gy;
 
 function mapToken(value: string): Token {
   switch (value) {
@@ -29,6 +29,9 @@ function mapToken(value: string): Token {
     case ",": return { type: "COMMA", value };
     case "=": return { type: "EQUALS", value };
     default:
+      if (value.startsWith("\"") && value.endsWith("\"") && value.length >= 2) {
+        return { type: "STRING", value: value.slice(1, -1) };
+      }
       if (!Number.isNaN(Number(value))) return { type: "NUMBER", value };
       return { type: "IDENT", value };
   }
@@ -118,7 +121,7 @@ class Parser {
       while (this.current()?.type !== "RBRACKET") {
         const dimensionId = this.consume("IDENT").value;
         this.consume("EQUALS");
-        const raw = this.consume("IDENT").value;
+        const raw = this.parseContextOverrideValue();
         overrides.push({ dimensionId, value: raw as ContextOverride["value"] });
         if (this.current()?.type === "COMMA") this.consume("COMMA");
       }
@@ -126,6 +129,25 @@ class Parser {
       return { kind: "contextualReference", name: ident, overrides };
     }
     return { kind: "identifier", name: ident };
+  }
+  /** Member / keyword after `=` in `[Dim=value]`; spaces in unquoted values become multiple IDENT tokens. */
+  private parseContextOverrideValue(): string {
+    const t = this.current();
+    if (!t) throw new Error("Unexpected end of formula");
+    if (t.type === "STRING") {
+      return this.consume("STRING").value;
+    }
+    if (t.type === "NUMBER") {
+      return this.consume("NUMBER").value;
+    }
+    if (t.type !== "IDENT") {
+      throw new Error(`Expected member or literal after '=' but found ${t.type}`);
+    }
+    let s = this.consume("IDENT").value;
+    while (this.current()?.type === "IDENT") {
+      s += " " + this.consume("IDENT").value;
+    }
+    return s;
   }
 }
 

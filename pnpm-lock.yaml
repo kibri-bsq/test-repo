@@ -10,6 +10,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@engine/bench':
+        specifier: workspace:*
+        version: link:../../packages/bench
       '@engine/execution-engine':
         specifier: workspace:*
         version: link:../../packages/execution-engine
@@ -51,6 +54,15 @@ importers:
       vitest:
         specifier: ^2.1.4
         version: 2.1.9
+
+  packages/bench:
+    dependencies:
+      '@engine/execution-engine':
+        specifier: workspace:*
+        version: link:../execution-engine
+      '@engine/test-data':
+        specifier: workspace:*
+        version: link:../test-data
 
   packages/contracts: {}
 
