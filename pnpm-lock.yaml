@@ -10,6 +10,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@engine/axis-planner':
+        specifier: workspace:*
+        version: link:../../packages/axis-planner
       '@engine/bench':
         specifier: workspace:*
         version: link:../../packages/bench
@@ -54,6 +57,12 @@ importers:
       vitest:
         specifier: ^2.1.4
         version: 2.1.9
+
+  packages/axis-planner:
+    dependencies:
+      '@engine/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/bench:
     dependencies:

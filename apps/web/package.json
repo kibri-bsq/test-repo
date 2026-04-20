@@ -13,7 +13,8 @@
     "react-dom": "^18.3.1",
     "@engine/execution-engine": "workspace:*",
     "@engine/test-data": "workspace:*",
-    "@engine/bench": "workspace:*"
+    "@engine/bench": "workspace:*",
+    "@engine/axis-planner": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

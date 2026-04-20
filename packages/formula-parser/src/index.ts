@@ -130,16 +130,12 @@ class Parser {
     }
     return { kind: "identifier", name: ident };
   }
-  /** Member / keyword after `=` in `[Dim=value]`; spaces in unquoted values become multiple IDENT tokens. */
+  /** Value after `=` in `[Dim=value]`; tokenizer splits on spaces, so join consecutive IDENTs. */
   private parseContextOverrideValue(): string {
     const t = this.current();
     if (!t) throw new Error("Unexpected end of formula");
-    if (t.type === "STRING") {
-      return this.consume("STRING").value;
-    }
-    if (t.type === "NUMBER") {
-      return this.consume("NUMBER").value;
-    }
+    if (t.type === "STRING") return this.consume("STRING").value;
+    if (t.type === "NUMBER") return this.consume("NUMBER").value;
     if (t.type !== "IDENT") {
       throw new Error(`Expected member or literal after '=' but found ${t.type}`);
     }

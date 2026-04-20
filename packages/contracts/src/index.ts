@@ -31,6 +31,16 @@ export interface DisplayOptions {
   includeDiagnostics: boolean;
 }
 
+export interface AxisOrderingRule {
+  dimensionId: DimensionId;
+  sequence: string[];
+}
+
+export interface AxisOrderingConfig {
+  row?: Record<string, string[]>;
+  column?: Record<string, string[]>;
+}
+
 export interface ViewRequest {
   rowDimensions: DimensionId[];
   columnDimensions: DimensionId[];
@@ -38,6 +48,7 @@ export interface ViewRequest {
   filters: FilterSpec[];
   totalOptions: TotalOptions;
   displayOptions: DisplayOptions;
+  axisOrdering?: AxisOrderingConfig;
 }
 
 export type DisplayState = "normal" | "suppressed" | "null" | "warning" | "error";

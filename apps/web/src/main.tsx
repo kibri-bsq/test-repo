@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { executeView } from "@engine/execution-engine";
 import { examples } from "@engine/test-data";
 import { runBenchmarks } from "@engine/bench";
+import { planMixedColumnAxis } from "@engine/axis-planner";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
@@ -153,6 +154,51 @@ function buildHierarchicalHeaderRows(displayColumns: DisplayColumn[]) {
   return rows;
 }
 
+
+type RowRenderCell = { show: boolean; value: string; rowSpan: number; kind: "normal" | "subtotal" | "grand" };
+
+function buildRowHeaderRenderMap(rowOrder: string[], rowDims: string[]) {
+  const partsByRow = rowOrder.map((rk) => rk.split("¦"));
+  const renderMap: RowRenderCell[][] = rowOrder.map(() =>
+    rowDims.map(() => ({ show: true, value: "", rowSpan: 1, kind: "normal" as const }))
+  );
+
+  for (let col = 0; col < rowDims.length; col++) {
+    let i = 0;
+    while (i < rowOrder.length) {
+      const currentParts = partsByRow[i];
+      const raw = currentParts[col] ?? "";
+      const prefix = currentParts.slice(0, col).join("¦");
+      const kind: "normal" | "subtotal" | "grand" =
+        raw === "__GRAND_TOTAL__" ? "grand" : raw === "__TOTAL__" ? "subtotal" : "normal";
+
+      if (raw === "__TOTAL__" || raw === "__GRAND_TOTAL__") {
+        renderMap[i][col] = { show: true, value: raw, rowSpan: 1, kind };
+        i += 1;
+        continue;
+      }
+
+      let span = 1;
+      while (i + span < partsByRow.length) {
+        const next = partsByRow[i + span];
+        const samePrefix = next.slice(0, col).join("¦") === prefix;
+        const nextRaw = next[col] ?? "";
+        const nextSpecial = nextRaw === "__TOTAL__" || nextRaw === "__GRAND_TOTAL__";
+        if (!samePrefix || nextRaw != raw || nextSpecial) break;
+        span += 1;
+      }
+
+      renderMap[i][col] = { show: true, value: raw, rowSpan: span, kind };
+      for (let k = 1; k < span; k++) {
+        renderMap[i + k][col] = { show: false, value: raw, rowSpan: 0, kind };
+      }
+      i += span;
+    }
+  }
+
+  return renderMap;
+}
+
 function syncToggleStates(request: any) {
   const rowGrandOn = !!request.totalOptions.showRowTotals;
   const colGrandOn = !!request.totalOptions.showColumnTotals;
@@ -183,6 +229,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [grandTotalMode, setGrandTotalMode] = useState<"none" | "row" | "column" | "both">("both");
+  const [columnOrderingText, setColumnOrderingText] = useState("Actual, Variance, Budget");
 
   const activeInput = useMemo(() => {
     if (useCustom && customPayload && customMetadata && customRequest) {
@@ -225,7 +272,11 @@ function App() {
 
   const matrixModel = useMemo(() => {
     if (!result || "__error" in result) return null;
+
+    const t0 = performance.now();
     const derived = buildDerivedMatrix(result.matrix.cells, (result.executionMeta as any).placementPlans ?? {});
+    const t1 = performance.now();
+
     const rowDims: string[] = activeInput.request.rowDimensions ?? [];
     const colDims: string[] = activeInput.request.columnDimensions ?? [];
 
@@ -246,7 +297,12 @@ function App() {
     colOrder = [...leafCols, ...subtotalCols, ...(grandColKey ? [grandColKey] : [])];
 
     const displayColumns = buildDisplayColumns(colOrder, metricLayoutMode, metricMode, metricOptions);
+    const t2 = performance.now();
     const headerRows = buildHierarchicalHeaderRows(displayColumns);
+    const rowHeaderRenderMap = buildRowHeaderRenderMap(rowOrder, rowDims);
+    const t3 = performance.now();
+
+    const benchExecution = benchmarkResults.find((b: any) => b.name === (useCustom ? "__CUSTOM__" : examples[selectedIndex].name))?.executionMs ?? null;
 
     return {
       rowDims,
@@ -255,11 +311,19 @@ function App() {
       colOrder,
       displayColumns,
       headerRows,
+      rowHeaderRenderMap,
       cellMap: derived.cellMap,
       grandRowKey,
-      grandColKey
+      grandColKey,
+      phaseBreakdown: {
+        executionMs: benchExecution,
+        matrixAssemblyMs: Math.round((t1 - t0) * 100) / 100,
+        displayColumnPrepMs: Math.round((t2 - t1) * 100) / 100,
+        headerBuildMs: Math.round((t3 - t2) * 100) / 100,
+        totalClientPrepMs: Math.round((t3 - t0) * 100) / 100
+      }
     };
-  }, [result, activeInput.request, metricLayoutMode, metricMode, metricOptions]);
+  }, [result, activeInput.request, metricLayoutMode, metricMode, metricOptions, benchmarkResults, useCustom, selectedIndex]);
 
   function loadBuiltIn(index: number) {
     const ex = examples[index];
@@ -422,9 +486,10 @@ function App() {
             return (
               <tr key={rowKey} className={isGrandRow ? "grandRow" : isSubtotalRow ? "subtotalRow" : ""}>
                 {matrixModel.rowDims.map((dim: string, idx: number) => {
-                  const raw = rowParts[idx] ?? "";
-                  const label = formatPathPart(raw, dim);
-                  return <td key={`${rowKey}-${dim}`}><strong>{label}</strong></td>;
+                  const cellMeta = matrixModel.rowHeaderRenderMap[matrixModel.rowOrder.indexOf(rowKey)][idx];
+                  if (!cellMeta.show) return null;
+                  const label = formatPathPart(cellMeta.value, dim);
+                  return <td key={`${rowKey}-${dim}`} rowSpan={cellMeta.rowSpan} className={cellMeta.kind === "grand" ? "grandRowCell" : cellMeta.kind === "subtotal" ? "subtotalRowCell" : ""}><strong>{label}</strong></td>;
                 })}
                 {matrixModel.displayColumns.map((dc: any) => {
                   const cell = matrixModel.cellMap.get(`${rowKey}||${dc.baseColKey}`);
@@ -505,6 +570,8 @@ function App() {
         .selectedCell { outline: 3px solid #1d4ed8; outline-offset: -3px; }
         .node-subtotal, .subtotalRow td { background: #f8fbff; }
         .node-grand, .grandRow td { background: #eef6ff; font-weight: 700; }
+        .subtotalRowCell { background: #f8fbff; }
+        .grandRowCell { background: #eef6ff; font-weight: 700; }
         .legendGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
         .matrixFullscreenOverlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 50; display: flex; }
         .matrixFullscreenPanel { background: white; margin: 16px; border-radius: 12px; border: 1px solid #dbe3ef; display: flex; flex-direction: column; width: calc(100vw - 32px); height: calc(100vh - 32px); overflow: hidden; }
@@ -513,7 +580,7 @@ function App() {
       `}</style>
 
       <div className="title">Axis-Aware KPI Compute Engine Playground</div>
-      <div className="subtitle">Full hierarchical column header engine plus simple benchmark visibility.</div>
+      <div className="subtitle">v14 introduces a true axis-planner layer for mixed KPI-aware column ordering, so derived KPI nodes can be ordered with base members such as Actual | Variance | Budget.</div>
 
       <div className="layout">
         <div className="panel">
@@ -551,6 +618,22 @@ function App() {
 
               <div className="sectionTitle">Current column dimensions</div>
               <div className="axisList">{workingRequest.columnDimensions.map((d: string) => <span key={d} className="pill">{d}</span>)}</div>
+
+              <div className="sectionTitle">Mixed axis ordering</div>
+              <div className="small">Comma-separated order for the Scenario band. Derived KPI nodes can be included here alongside base members.</div>
+              <input
+                type="text"
+                value={columnOrderingText}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setColumnOrderingText(v);
+                  updateRequest((next) => {
+                    next.axisOrdering = next.axisOrdering ?? {};
+                    next.axisOrdering.column = next.axisOrdering.column ?? {};
+                    next.axisOrdering.column["Scenario"] = v.split(",").map((s: string) => s.trim()).filter(Boolean);
+                  });
+                }}
+              />
 
               <div className="sectionTitle">Grand Total controls</div>
               <select value={grandTotalMode} onChange={(e) => applyGrandTotalMode(e.target.value as any)}>
@@ -617,8 +700,11 @@ function App() {
           ) : (
             <>
               <div className="sectionTitle">Performance benchmark snapshot</div>
-              <div className="small">Execution timing only. This excludes browser paint time, DOM size cost, and scroll interaction overhead. For the large-volume example, matrix render cost will be more sensitive to the number of display columns than to raw record count alone.</div>
-              <div className="code">{JSON.stringify(benchmarkResults, null, 2)}</div>
+              <div className="small">Package-level benchmark measures execution only. The active matrix also shows client-side prep phases: matrix expansion, display-column prep, and header building.</div>
+              <div className="code">{JSON.stringify({
+                packageBenchmarks: benchmarkResults,
+                activeMatrixPhases: matrixModel?.phaseBreakdown ?? null
+              }, null, 2)}</div>
             </>
           )}
 
@@ -636,6 +722,8 @@ function App() {
                 <div><strong>Plan Version:</strong> {result.executionMeta.planVersion}</div>
                 <div><strong>Row count:</strong> {matrixModel.rowOrder.length} &nbsp; <strong>Display columns:</strong> {matrixModel.displayColumns.length}</div>
                 <div><strong>Header depth:</strong> {matrixModel.headerRows.length}</div>
+                <div><strong>Axis plan nodes:</strong> {matrixModel.axisTree?.map((n: any) => n.label).join(" | ")}</div>
+                <div><strong>Phase timings:</strong> exec {String(matrixModel.phaseBreakdown.executionMs ?? "n/a")} ms · matrix {matrixModel.phaseBreakdown.matrixAssemblyMs} ms · display {matrixModel.phaseBreakdown.displayColumnPrepMs} ms · headers {matrixModel.phaseBreakdown.headerBuildMs} ms</div>
               </div>
 
               <div className="legendGrid">
@@ -643,6 +731,7 @@ function App() {
                 <div className="legendItem"><strong>Column header depth</strong> equals column-dimension depth plus metric level when metrics are expanded.</div>
                 <div className="legendItem"><strong>Merged period headers</strong> common parents such as Jan span all child measures/KPIs.</div>
                 <div className="legendItem"><strong>Granular subtotals</strong> selectable per row dimension and per column dimension.</div>
+                <div className="legendItem"><strong>Mixed ordering</strong> base members and derived KPI nodes can share one ordering sequence.</div>
               </div>
 
               <div className="toolbarGrid3">
